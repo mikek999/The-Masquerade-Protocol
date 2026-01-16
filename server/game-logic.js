@@ -108,7 +108,7 @@ class GameEngine {
 
             return result.recordset;
         } catch (err) {
-            console.warn('Vector search failed (perhaps not on SQL 2025):', err.message);
+            console.error('Vector search failed (requires SQL Server 2025):', err.message);
             return [];
         }
     }

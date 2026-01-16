@@ -12,17 +12,17 @@ To run the full stack (Node.js Game Server, SQL Server, and Ollama with Llama 3/
 - **CPU**: 4+ Cores (Modern Intel i5/i7 or AMD Ryzen 5/7).
 - **RAM**: 16GB minimum (32GB recommended for smooth LLM performance).
 - **GPU**: NVIDIA GPU with 8GB+ VRAM (Optional, for local Ollama acceleration).
-- **Storage**: 50GB+ SSD (NVMe preferred for SQL Server performance).
+- **Storage**: 50GB+ SSD (NVMe preferred for SQL Server 2025 performance).
 - **Network**: Stable broadband with port 80/443 exposed if hosting for remote players. Supports **Traefik** for automatic SSL.
 
 ## Prerequisites
 - Docker and Docker Compose installed.
 - Access to the internet for pulling images and Gemini/OpenRouter APIs.
-- (Optional) SQL Server 2025 preview for vector features.
+- SQL Server 2025 installed (or via Docker).
 
 ## Starting the System
 
-To start the entire stack (SQL Server, Ollama, and Game Server), run:
+To start the entire stack (SQL Server 2025, Ollama, and Game Server), run:
 
 ```bash
 docker-compose up -d
