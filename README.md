@@ -35,10 +35,10 @@ Configuration is handled via environment variables in `docker-compose.yml`:
 | :--- | :--- | :--- |
 | `DB_SERVER` | Hostname of the SQL Server | `sqlserver` |
 | `DB_PASSWORD` | SA password for SQL Server | `YourStrong!Passw0rd` |
-| `OLLAMA_URL` | URL for the Ollama container | `http://ollama:11434` |
-| `GEMINI_API_KEY` | Google AI Studio Key | `YourKeyHere` |
-| `OPENROUTER_API_KEY`| API Key for OpenRouter.ai | `YourKeyHere` |
 | `PORT` | Listening port for the game server | `443` |
+
+> [!IMPORTANT]
+> **AI Keys (Gemini, OpenRouter) are now configured via the Admin UI** (`/admin`) for security and flexibility. Environment variables are only used for the core infrastructure bootstrap.
 
 ### Home Lab & Traefik
 This project includes pre-configured labels in `docker-compose.yml` for **Traefik**. To enable:

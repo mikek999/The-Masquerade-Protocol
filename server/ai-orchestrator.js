@@ -5,17 +5,22 @@ const axios = require('axios');
  * Supports: Local Ollama, OpenRouter (Cheap cloud), and Google Gemini (Director)
  */
 class AIOrchestrator {
-    constructor(config) {
-        this.geminiKey = config.geminiKey;
-        this.openRouterKey = config.openRouterKey;
-        this.ollamaUrl = config.ollamaUrl || 'http://localhost:11434';
+    constructor(config = {}) {
+        this.updateConfig(config);
+    }
+
+    updateConfig(config) {
+        this.geminiKey = config.GEMINI_API_KEY || config.geminiKey;
+        this.openRouterKey = config.OPENROUTER_API_KEY || config.openRouterKey;
+        this.ollamaUrl = config.OLLAMA_URL || config.ollamaUrl || 'http://localhost:11434';
+        this.workhorsePref = config.WORKHORSE_PREF || 'ollama';
     }
 
     /**
      * Call a Tier 2 "Workhorse" model (Ollama or OpenRouter)
      */
     async callWorkhorse(prompt, systemInstruction = '') {
-        if (this.openRouterKey) {
+        if (this.workhorsePref === 'openrouter' && this.openRouterKey) {
             return await this.callOpenRouter(prompt, systemInstruction, "meta-llama/llama-3-8b-instruct:free");
         } else {
             return await this.callOllama(prompt, systemInstruction, "llama3");

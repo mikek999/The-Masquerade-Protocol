@@ -47,7 +47,8 @@ body.admin-body {
     transition: color 0.3s;
 }
 
-.admin-nav a:hover, .admin-nav a.active {
+.admin-nav a:hover,
+.admin-nav a.active {
     color: var(--text-accent);
 }
 
@@ -112,10 +113,27 @@ header h1 {
 .admin-table {
     width: 100%;
     border-collapse: collapse;
+
+    .admin-select {
+        width: 100%;
+        background: #000;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 1rem;
+        font-family: var(--body-font);
+        border-radius: 4px;
+    }
+
+    .admin-select:focus {
+        outline: none;
+        border-color: var(--text-accent);
+    }
+
     margin-top: 1rem;
 }
 
-.admin-table th, .admin-table td {
+.admin-table th,
+.admin-table td {
     padding: 1rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
@@ -149,7 +167,8 @@ label {
     color: var(--text-accent);
 }
 
-textarea, input {
+textarea,
+input {
     width: 100%;
     background: #000;
     border: 1px solid var(--border-color);
@@ -159,7 +178,8 @@ textarea, input {
     border-radius: 4px;
 }
 
-textarea:focus, input:focus {
+textarea:focus,
+input:focus {
     outline: none;
     border-color: var(--text-accent);
 }

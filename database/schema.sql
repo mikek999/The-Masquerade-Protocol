@@ -129,4 +129,14 @@ CREATE TABLE EntityMetadata (
     KeyName NVARCHAR(50) NOT NULL,
     KeyValue NVARCHAR(MAX) NOT NULL
 );
+
+-- 13. SystemConfig: Global settings, API keys, and model preferences
+CREATE TABLE SystemConfig (
+    ConfigID INT PRIMARY KEY IDENTITY(1,1),
+    Category NVARCHAR(50) NOT NULL, -- 'AI_MODELS', 'NETWORK', 'AUTH'
+    ConfigKey NVARCHAR(100) NOT NULL UNIQUE,
+    ConfigValue NVARCHAR(MAX) NOT NULL,
+    IsSecret BIT DEFAULT 0, -- Mask in UI
+    UpdatedAt DATETIME DEFAULT GETDATE()
+);
 GO

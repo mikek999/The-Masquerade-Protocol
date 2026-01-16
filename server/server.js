@@ -172,7 +172,18 @@ app.get('/api/v1/admin/players', async (req, res) => {
 
 app.post('/api/v1/admin/generate', async (req, res) => {
     const { prompt, playerCount } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+
+    // Attempt to get from DB first
+    let apiKey;
+    try {
+        const pool = await sql.connect(dbConfig);
+        const configResult = await pool.request()
+            .input('key', sql.NVarChar, 'GEMINI_API_KEY')
+            .query('SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = @key');
+        apiKey = configResult.recordset[0]?.ConfigValue || process.env.GEMINI_API_KEY;
+    } catch (e) {
+        apiKey = process.env.GEMINI_API_KEY;
+    }
 
     if (!apiKey) return res.status(500).json({ error: 'Gemini API Key missing' });
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
@@ -187,6 +198,45 @@ app.post('/api/v1/admin/generate', async (req, res) => {
         res.json({ success: true, worldId, storyName: storyJson.metadata.name });
     } catch (err) {
         console.error('Generation/Injest failure:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/v1/admin/config', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query('SELECT ConfigKey, ConfigValue FROM SystemConfig');
+        const config = {};
+        result.recordset.forEach(row => {
+            config[row.ConfigKey] = row.ConfigValue;
+        });
+        res.json(config);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/v1/admin/config', async (req, res) => {
+    const configs = req.body;
+    try {
+        const pool = await sql.connect(dbConfig);
+        for (const [key, value] of Object.entries(configs)) {
+            await pool.request()
+                .input('key', sql.NVarChar, key)
+                .input('val', sql.NVarChar, value)
+                .query(`
+                    IF EXISTS (SELECT 1 FROM SystemConfig WHERE ConfigKey = @key)
+                        UPDATE SystemConfig SET ConfigValue = @val, UpdatedAt = GETDATE() WHERE ConfigKey = @key
+                    ELSE
+                        INSERT INTO SystemConfig (Category, ConfigKey, ConfigValue) VALUES ('AI_MODELS', @key, @val)
+                `);
+        }
+
+        // Refresh Orchestrator Config
+        aiOrchestrator.updateConfig(configs);
+
+        res.json({ success: true });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
@@ -246,7 +296,17 @@ app.listen(PORT, async () => {
                 console.warn('Initial scenario file not found at:', storyPath);
             }
         }
+
+        // Load AI Config from SystemConfig table
+        const configResult = await pool.request().query('SELECT ConfigKey, ConfigValue FROM SystemConfig');
+        const dbConfigMap = {};
+        configResult.recordset.forEach(row => {
+            dbConfigMap[row.ConfigKey] = row.ConfigValue;
+        });
+        aiOrchestrator.updateConfig(dbConfigMap);
+        console.log('AI Orchestrator re-indexed with Dynamic Configuration.');
+
     } catch (err) {
-        console.error('Auto-ingest failed:', err);
+        console.error('Auto-bootstrap failed:', err);
     }
 });

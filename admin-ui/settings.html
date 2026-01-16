@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masquerade Admin | Settings</title>
+    <link rel="stylesheet" href="styles.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Orbitron:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="admin-body">
+    <nav class="admin-nav">
+        <div class="logo">MASQUERADE_ADMIN</div>
+        <ul>
+            <li><a href="index.html">DASHBOARD</a></li>
+            <li><a href="generator.html">SCENARIO_GEN</a></li>
+            <li><a href="settings.html" class="active">SETTINGS</a></li>
+        </ul>
+    </nav>
+
+    <main class="admin-container">
+        <header>
+            <h1>System Settings</h1>
+            <p>Configure AI Providers and Game Rules.</p>
+        </header>
+
+        <section class="generator-section">
+            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
+                <h2 style="color: var(--text-accent); margin-top: 0;">AI Providers</h2>
+
+                <div class="form-group">
+                    <label>Google Gemini API Key (Director)</label>
+                    <input type="password" id="gemini_key" placeholder="AI Studio Key">
+                </div>
+
+                <div class="form-group">
+                    <label>OpenRouter API Key (Workhorse Cloud)</label>
+                    <input type="password" id="openrouter_key" placeholder="sk-or-...">
+                </div>
+
+                <div class="form-group">
+                    <label>Ollama URL (Workhorse Local)</label>
+                    <input type="text" id="ollama_url" value="http://ollama:11434">
+                </div>
+            </div>
+
+            <div class="stat-card" style="text-align: left;">
+                <h2 style="color: var(--text-accent); margin-top: 0;">Model Routing</h2>
+                <div class="form-group">
+                    <label>Workhorse Preference</label>
+                    <select id="workhorse_pref" class="admin-select">
+                        <option value="ollama">Local (Ollama)</option>
+                        <option value="openrouter">Cloud (OpenRouter)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="saveBtn" style="margin-top: 2rem;">SAVE_CONFIG</button>
+            <div id="saveStatus" style="margin-top: 1rem; font-size: 0.8rem;"></div>
+        </section>
+    </main>
+
+    <script>
+        const saveBtn = document.getElementById('saveBtn');
+        const status = document.getElementById('saveStatus');
+
+        // Initial Load
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/v1/admin/config');
+                const config = await response.json();
+
+                document.getElementById('gemini_key').value = config.GEMINI_API_KEY || '';
+                document.getElementById('openrouter_key').value = config.OPENROUTER_API_KEY || '';
+                document.getElementById('ollama_url').value = config.OLLAMA_URL || 'http://ollama:11434';
+                document.getElementById('workhorse_pref').value = config.WORKHORSE_PREF || 'ollama';
+            } catch (err) {
+                console.error("Load failed", err);
+            }
+        }
+
+        saveBtn.onclick = async () => {
+            const data = {
+                GEMINI_API_KEY: document.getElementById('gemini_key').value,
+                OPENROUTER_API_KEY: document.getElementById('openrouter_key').value,
+                OLLAMA_URL: document.getElementById('ollama_url').value,
+                WORKHORSE_PREF: document.getElementById('workhorse_pref').value
+            };
+
+            status.innerText = "> Syncing with SQL Cluster...";
+
+            try {
+                const response = await fetch('/api/v1/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    status.innerText = "> Configuration baked successfully.";
+                    status.style.color = "var(--text-accent)";
+                } else {
+                    status.innerText = "> Error: Sync failed.";
+                    status.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                status.innerText = "> Critical: Network error.";
+            }
+        };
+
+        loadConfig();
+    </script>
+</body>
+
+</html>
