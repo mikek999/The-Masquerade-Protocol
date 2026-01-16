@@ -1,8 +1,11 @@
-const axios = require('axios');
-
 /**
- * AIOrchestrator - Unified interface for tiered AI models
- * Supports: Local Ollama, OpenRouter (Cheap cloud), and Google Gemini (Director)
+ * AIOrchestrator - Dynamic AI Provider Manager
+ * Manages two roles:
+ * 1. DIRECTOR: High intelligence (Story, Adjudication)
+ * 2. WORKHORSE: speed/Volume (NPCs, Descriptions)
+ * 
+ * Supported Providers: 'gemini', 'openrouter', 'ollama'
+ * Uses NATIVE FETCH (No 3rd Party Libs)
  */
 class AIOrchestrator {
     constructor(config = {}) {
@@ -10,96 +13,195 @@ class AIOrchestrator {
     }
 
     updateConfig(config) {
-        this.geminiKey = config.GEMINI_API_KEY || config.geminiKey;
-        this.openRouterKey = config.OPENROUTER_API_KEY || config.openRouterKey;
-        this.ollamaUrl = config.OLLAMA_URL || config.ollamaUrl || 'http://localhost:11434';
-        this.workhorsePref = config.WORKHORSE_PREF || 'ollama';
+        // Flat config map from DB
+        this.config = config;
+
+        this.director = {
+            provider: config.AI_DIRECTOR_PROVIDER || 'gemini',
+            key: config.AI_DIRECTOR_KEY || config.GEMINI_API_KEY,
+            url: config.AI_DIRECTOR_URL,
+            model: config.AI_DIRECTOR_MODEL || 'gemini-1.5-pro'
+        };
+
+        this.workhorse = {
+            provider: config.AI_WORKHORSE_PROVIDER || 'ollama',
+            key: config.AI_WORKHORSE_KEY || config.OPENROUTER_API_KEY,
+            url: config.AI_WORKHORSE_URL || config.OLLAMA_URL || 'http://ollama:11434',
+            model: config.AI_WORKHORSE_MODEL || 'llama3'
+        };
     }
 
-    /**
-     * Call a Tier 2 "Workhorse" model (Ollama or OpenRouter)
-     */
+    // --- Role Based Calls ---
+
+    async callDirector(prompt, systemInstruction = '') {
+        return await this.routeRequest(this.director, prompt, systemInstruction);
+    }
+
     async callWorkhorse(prompt, systemInstruction = '') {
-        if (this.workhorsePref === 'openrouter' && this.openRouterKey) {
-            return await this.callOpenRouter(prompt, systemInstruction, "meta-llama/llama-3-8b-instruct:free");
-        } else {
-            return await this.callOllama(prompt, systemInstruction, "llama3");
+        return await this.routeRequest(this.workhorse, prompt, systemInstruction);
+    }
+
+    // --- Verification & Routing ---
+
+    async verifyProvider(role) {
+        // role = 'director' or 'workhorse'
+        const target = role === 'director' ? this.director : this.workhorse;
+        try {
+            const res = await this.routeRequest(target, 'Say "Verified"', 'System Check');
+            return { success: true, message: res };
+        } catch (e) {
+            return { success: false, error: e.message };
         }
     }
 
-    /**
-     * Call the Tier 3 "Director" model (Google Gemini)
-     */
-    async callDirector(prompt, systemInstruction = '') {
-        if (!this.geminiKey) throw new Error("Gemini API Key required for Director tasks");
+    async routeRequest(target, prompt, systemInstruction) {
+        switch (target.provider) {
+            case 'gemini':
+                return await this.callGemini(target, prompt, systemInstruction);
+            case 'openrouter':
+                return await this.callOpenRouter(target, prompt, systemInstruction);
+            case 'ollama':
+                return await this.callOllama(target, prompt, systemInstruction);
+            default:
+                throw new Error(`Unknown provider: ${target.provider}`);
+        }
+    }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${this.geminiKey}`;
+    // --- Providers ---
+
+    async callGemini(target, prompt, systemInstruction) {
+        if (!target.key) throw new Error("Gemini Key Missing");
+        // Convert model name if simplified
+        const model = target.model.includes('/') ? target.model : `models/${target.model}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${target.key}`;
+
         const payload = {
             contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }]
         };
 
         try {
-            const response = await axios.post(url, payload);
-            return response.data.candidates[0].content.parts[0].text;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || res.statusText);
+            }
+
+            const data = await res.json();
+            return data.candidates[0].content.parts[0].text;
         } catch (err) {
-            console.error('Gemini Director failed:', err.response?.data || err.message);
+            console.error('Gemini Check Failed:', err.message);
             throw err;
         }
     }
 
-    async callOpenRouter(prompt, systemInstruction, model) {
+    async callOpenRouter(target, prompt, systemInstruction) {
+        if (!target.key) throw new Error("OpenRouter Key Missing");
         try {
-            const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-                model: model,
-                messages: [
-                    { role: "system", content: systemInstruction },
-                    { role: "user", content: prompt }
-                ]
-            }, {
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: 'POST',
                 headers: {
-                    "Authorization": `Bearer ${this.openRouterKey}`,
+                    "Authorization": `Bearer ${target.key}`,
+                    "Content-Type": "application/json",
                     "HTTP-Referer": "https://playertxt.org",
                     "X-Title": "PlayerTXT"
-                }
+                },
+                body: JSON.stringify({
+                    model: target.model,
+                    messages: [
+                        { role: "system", content: systemInstruction },
+                        { role: "user", content: prompt }
+                    ]
+                })
             });
-            return response.data.choices[0].message.content;
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || res.statusText);
+            }
+
+            const data = await res.json();
+            return data.choices[0].message.content;
         } catch (err) {
-            console.error('OpenRouter failed:', err.response?.data || err.message);
             throw err;
         }
     }
 
-    async callOllama(prompt, systemInstruction, model) {
+    async callOllama(target, prompt, systemInstruction) {
+        const baseUrl = target.url.replace(/\/$/, ''); // Trim trailing slash
         try {
-            const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
-                model: model,
-                prompt: `${systemInstruction}\n\n${prompt}`,
-                stream: false
+            const res = await fetch(`${baseUrl}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: target.model,
+                    prompt: `${systemInstruction}\n\n${prompt}`,
+                    stream: false
+                })
             });
-            return response.data.response;
+
+            if (!res.ok) throw new Error(`Ollama Status: ${res.statusText}`);
+
+            const data = await res.json();
+            return data.response;
         } catch (err) {
-            console.error('Ollama failed:', err.message);
-            // Fallback to error message or mock for local dev if ollama isn't running
-            return "Local AI (Ollama) is offline.";
+            throw new Error(`Ollama Error: ${err.message}`);
         }
+    }
+
+    async fetchModels(provider, key, url) {
+        try {
+            if (provider === 'gemini') {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+                if (!res.ok) throw new Error('Failed to fetch Gemini models');
+                const data = await res.json();
+                return data.models
+                    .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+                    .map(m => m.name.replace('models/', ''));
+
+            } else if (provider === 'openrouter') {
+                const res = await fetch('https://openrouter.ai/api/v1/models');
+                if (!res.ok) throw new Error('Failed to fetch OpenRouter models');
+                const data = await res.json();
+                return data.data.map(m => m.id);
+
+            } else if (provider === 'ollama') {
+                const baseUrl = (url || 'http://ollama:11434').replace(/\/$/, '');
+                const res = await fetch(`${baseUrl}/api/tags`);
+                if (!res.ok) throw new Error('Failed to fetch Ollama models');
+                const data = await res.json();
+                return data.models.map(m => m.name);
+            }
+        } catch (e) {
+            throw new Error(`Fetch Models Failed: ${e.message}`);
+        }
+        return [];
     }
 
     /**
-     * Embed text for SQL Server 2025 Vector search
+     * Embedding (Director Only for consistency)
      */
     async getEmbedding(text) {
-        if (!this.geminiKey) return null;
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${this.geminiKey}`;
+        if (this.director.provider !== 'gemini') return null;
+        const model = 'models/embedding-001';
+        const url = `https://generativelanguage.googleapis.com/v1beta/${model}:embedContent?key=${this.director.key}`;
         try {
-            const response = await axios.post(url, {
-                model: "models/embedding-001",
-                content: { parts: [{ text }] }
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model,
+                    content: { parts: [{ text }] }
+                })
             });
-            return response.data.embedding.values;
-        } catch (err) {
-            console.error('Embedding failed:', err.message);
-            return null;
-        }
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data.embedding.values;
+        } catch (err) { return null; }
     }
 }
 

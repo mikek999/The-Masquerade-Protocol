@@ -45,17 +45,50 @@
         </header>
 
         <section class="admin-stats">
-            <div class="stat-card">
-                <h3>Active Sessions</h3>
-                <div class="value">0</div>
+            <h3>Active Players</h3>
+            <div class="value">0</div>
             </div>
-            <div class="stat-card">
-                <h3>Connected Players</h3>
-                <div class="value">0</div>
+
+            <div class="stat-card" style="min-width: 250px;">
+                <h3>AI Systems</h3>
+                <div style="font-size: 0.8rem; text-align: left; margin-top: 0.5rem;">
+                    <div style="margin-bottom: 5px;">
+                        <span style="color: #888;">DIRECTOR:</span> <span id="dashDirectorStatus">--</span>
+                        <div style="font-size: 0.7rem; color: #555;" id="dashDirectorModel">...</div>
+                    </div>
+                    <div>
+                        <span style="color: #888;">WORKHORSE:</span> <span id="dashWorkhorseStatus">--</span>
+                        <div style="font-size: 0.7rem; color: #555;" id="dashWorkhorseModel">...</div>
+                    </div>
+                </div>
             </div>
+
             <div class="stat-card">
-                <h3>AI Players</h3>
-                <div class="value" id="aiCount">--</div>
+                <div class="stat-card">
+                    <h3>Mission Timer</h3>
+                    <div class="value" id="dashTimer">--:--</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Global State</h3>
+                    <div class="value" id="dashStatus">IDLE</div>
+                </div>
+        </section>
+
+        <!-- Mission Control Panel -->
+        <section class="admin-table-container" style="border-left: 4px solid var(--accent-color);">
+            <h2>Mission Control</h2>
+            <div style="display: flex; gap: 2rem; align-items: flex-end;">
+                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                    <label>Select Operation (Story)</label>
+                    <select id="storySelect" class="admin-select">
+                        <option value="">LOADING STORIES...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="width: 150px; margin-bottom: 0;">
+                    <label>Duration (Min)</label>
+                    <input type="number" id="gameDuration" value="30" min="5" max="180">
+                </div>
+                <button id="startMissionBtn" class="btn-primary" style="height: 50px;">INITIATE LAUNCH</button>
             </div>
         </section>
 
@@ -126,9 +159,127 @@
 
                 document.getElementById('serverIp').innerText = data.ip;
 
+                // AI Status
+                if (data.aiStatus) {
+                    const d = data.aiStatus.director;
+                    const w = data.aiStatus.workhorse;
+
+                    const dEl = document.getElementById('dashDirectorStatus');
+                    dEl.innerText = d.status;
+                    dEl.className = d.status === 'ONLINE' ? 'status-active' : 'status-offline'; // reusing css
+                    dEl.style.color = d.status === 'ONLINE' ? '#00ff9d' : '#ff4d4d';
+                    document.getElementById('dashDirectorModel').innerText = d.model;
+
+                    const wEl = document.getElementById('dashWorkhorseStatus');
+                    wEl.innerText = w.status;
+                    wEl.style.color = w.status === 'ONLINE' ? '#00ff9d' : '#ff4d4d';
+                    document.getElementById('dashWorkhorseModel').innerText = w.model;
+                }
+
+
+                // --- Mission Control Logic ---
+                loadStories();
+                updateMissionStatus();
+                setInterval(updateMissionStatus, 1000);
+
+                const missionBtn = document.getElementById('startMissionBtn');
+
+                missionBtn.onclick = async () => {
+                    const status = document.getElementById('dashStatus').innerText;
+
+                    if (status === 'RUNNING' || status === 'WAITING') {
+                        // ABORT ACTION
+                        if (!confirm('ABORT MISSION? This will disconnect all players.')) return;
+
+                        await fetch('/api/v1/admin/game/stop', { method: 'POST' });
+                        alert('Mission Aborted.');
+                    } else {
+                        // START ACTION
+                        const worldId = document.getElementById('storySelect').value;
+                        const duration = document.getElementById('gameDuration').value;
+                        if (!worldId) return alert('Select a Story first');
+
+                        const res = await fetch('/api/v1/admin/game/schedule', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ worldId, durationMinutes: duration })
+                        });
+
+                        if (res.ok) {
+                            alert('Mission Sequence Initiated');
+                        } else {
+                            const err = await res.json();
+                            alert('Launch Failed: ' + err.error);
+                        }
+                    }
+                    updateMissionStatus();
+                };
+
             } catch (e) {
                 document.getElementById('sysStatus').innerText = 'OFFLINE';
             }
+        }
+
+        async function loadStories() {
+            try {
+                const res = await fetch('/api/v1/admin/stories');
+                const stories = await res.json();
+                const sel = document.getElementById('storySelect');
+                sel.innerHTML = '<option value="">-- SELECT TARGET --</option>';
+                stories.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.WorldID;
+                    opt.innerText = s.Name;
+                    sel.appendChild(opt);
+                });
+            } catch (e) { console.error('Load stories failed', e); }
+        }
+
+        async function updateMissionStatus() {
+            try {
+                const res = await fetch('/api/v1/admin/game/status');
+                const data = await res.json();
+
+                const statusEl = document.getElementById('dashStatus');
+                statusEl.innerText = data.status;
+
+                const btn = document.getElementById('startMissionBtn');
+
+                // Pre-flight check viz
+                const sysStatus = document.getElementById('sysStatus');
+                if (data.checks && (!data.checks.sql || !data.checks.llm)) {
+                    sysStatus.innerText = 'FAULT';
+                    sysStatus.className = 'status-offline';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.innerText = 'SYSTEM FAULT';
+                } else {
+                    sysStatus.innerText = 'ONLINE';
+                    sysStatus.className = 'status-active';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                }
+
+                // Toggle Button State
+                if (data.status === 'RUNNING' || data.status === 'WAITING') {
+                    btn.innerText = 'ABORT MISSION';
+                    btn.style.background = 'red';
+                    btn.style.color = 'white';
+                } else if (!btn.disabled) {
+                    btn.innerText = 'INITIATE LAUNCH';
+                    btn.style.background = ''; // reset to default CSS
+                    btn.style.color = '';
+                }
+
+                // Format Timer
+                if (data.timer > 0) {
+                    const m = Math.floor(data.timer / 60);
+                    const s = data.timer % 60;
+                    document.getElementById('dashTimer').innerText = `${m}:${s < 10 ? '0' + s : s}`;
+                } else {
+                    document.getElementById('dashTimer').innerText = '--:--';
+                }
+            } catch (e) { }
         }
 
         // Initial Load

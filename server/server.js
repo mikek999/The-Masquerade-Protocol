@@ -57,13 +57,143 @@ const dbConfig = {
 
 // Initialize AI Orchestrator
 const aiOrchestrator = new AIOrchestrator({
-    geminiKey: process.env.GEMINI_API_KEY,
-    openRouterKey: process.env.OPENROUTER_API_KEY,
-    ollamaUrl: process.env.OLLAMA_URL
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OLLAMA_URL: process.env.OLLAMA_URL
 });
+global.aiOrchestrator = aiOrchestrator; // Expose for Status API & PreFlight Checks
 
 // Initialize Game Engine
+// Initialize Game Engine
 const gameEngine = new GameEngine(dbConfig, aiOrchestrator);
+
+// --- Pre-flight Checks ---
+const PreFlightChecks = {
+    sql: false,
+    llm: false,
+    lastCheck: null,
+
+    run: async () => {
+        // 1. SQL
+        try {
+            const pool = await sql.connect(dbConfig);
+            PreFlightChecks.sql = true;
+        } catch { PreFlightChecks.sql = false; }
+
+        // 2. LLM (Enhanced)
+        if (global.aiOrchestrator) {
+            try {
+                // Verify Workhorse
+                const whCheck = await global.aiOrchestrator.verifyProvider('workhorse');
+                if (whCheck.success) {
+                    logToBuffer(`AI Workhorse (${global.aiOrchestrator.workhorse.provider}): ONLINE`, 'INFO');
+                } else {
+                    logToBuffer(`AI Workhorse (${global.aiOrchestrator.workhorse.provider}): OFFLINE - ${whCheck.error}`, 'WARN');
+                }
+
+                // Verify Director
+                const dirCheck = await global.aiOrchestrator.verifyProvider('director');
+                if (dirCheck.success) {
+                    logToBuffer(`AI Director (${global.aiOrchestrator.director.provider}): ONLINE`, 'INFO');
+                } else {
+                    logToBuffer(`AI Director (${global.aiOrchestrator.director.provider}): OFFLINE - ${dirCheck.error}`, 'WARN');
+                }
+
+                // Strict: LLM is OK if Workhorse is OK (Director might be optional/cloud)
+                // But for now let's set it based on Workhorse connectivity as the baseline
+                PreFlightChecks.llm = whCheck.success;
+            } catch (e) {
+                console.error(e);
+                PreFlightChecks.llm = false;
+            }
+        }
+        PreFlightChecks.lastCheck = new Date();
+
+        const overall = PreFlightChecks.sql && PreFlightChecks.llm ? 'ONLINE' : 'DEGRADED';
+        if (global.SERVER_MODE !== overall) {
+            global.SERVER_MODE = overall;
+            logToBuffer(`System Status Change: ${overall}`, overall === 'ONLINE' ? 'INFO' : 'WARN');
+        }
+    }
+};
+
+// Run check periodically
+setInterval(PreFlightChecks.run, 30000);
+PreFlightChecks.run(); // Initial check
+
+// --- Game Session Scheduler ---
+const GameScheduler = {
+    status: 'WAITING', // WAITING, RUNNING, COMPLETED
+    timer: 0,
+    sessionId: null,
+    worldId: null,
+    startTime: null,
+    endTime: null,
+    interval: null,
+
+    startTickLoop: () => {
+        if (GameScheduler.interval) clearInterval(GameScheduler.interval);
+        GameScheduler.interval = setInterval(async () => {
+            const now = new Date();
+
+            if (GameScheduler.status === 'WAITING' && GameScheduler.startTime) {
+                const diff = (GameScheduler.startTime - now) / 1000;
+                GameScheduler.timer = Math.floor(diff);
+
+                if (diff <= 0) {
+                    await GameScheduler.activateSession();
+                }
+            } else if (GameScheduler.status === 'RUNNING' && GameScheduler.endTime) {
+                const diff = (GameScheduler.endTime - now) / 1000;
+                GameScheduler.timer = Math.floor(diff);
+
+                if (diff <= 0) {
+                    await GameScheduler.completeSession();
+                }
+            }
+        }, 1000);
+    },
+
+    activateSession: async () => {
+        console.log('[SCHEDULER] Activating Session...');
+        GameScheduler.status = 'RUNNING';
+        try {
+            const pool = await sql.connect(dbConfig);
+            // Create Session Row
+            const res = await pool.request()
+                .input('wid', sql.Int, GameScheduler.worldId)
+                .query(`INSERT INTO Sessions (WorldID, StartTime, IsActive) OUTPUT INSERTED.SessionID VALUES (@wid, GETDATE(), 1)`);
+
+            GameScheduler.sessionId = res.recordset[0].SessionID;
+            console.log(`[SCHEDULER] Session ${GameScheduler.sessionId} Started.`);
+            logToBuffer(`Session ${GameScheduler.sessionId} Started`, 'INFO');
+        } catch (e) {
+            console.error('[SCHEDULER] Start Failed', e);
+            logToBuffer(`Session Start Failed: ${e.message}`, 'ERROR');
+        }
+    },
+
+    completeSession: async () => {
+        console.log('[SCHEDULER] Completing Session...');
+        GameScheduler.status = 'COMPLETED';
+        GameScheduler.timer = 0;
+        try {
+            const pool = await sql.connect(dbConfig);
+            if (GameScheduler.sessionId) {
+                await pool.request()
+                    .input('sid', sql.Int, GameScheduler.sessionId)
+                    .query(`UPDATE Sessions SET IsActive = 0, EndTime = GETDATE() WHERE SessionID = @sid`);
+            }
+            logToBuffer(`Session ${GameScheduler.sessionId || '?'} Completed`, 'INFO');
+        } catch (e) {
+            console.error('[SCHEDULER] End Failed', e);
+        }
+    }
+};
+
+GameScheduler.startTickLoop(); // Start on boot
+
+// ------------------------------
 
 // Middleware
 app.use(helmet({
@@ -455,12 +585,34 @@ app.post('/api/v1/admin/server-mode', async (req, res) => {
 });
 
 app.get('/api/v1/admin/status', async (req, res) => {
-    let dbStatus = 'OFFLINE';
+    // AI Checks
+    let aiStatus = {
+        director: { status: 'UNKNOWN', model: 'N/A' },
+        workhorse: { status: 'UNKNOWN', model: 'N/A' }
+    };
+    let dbStatus = 'OFFLINE'; // Initialize dbStatus
+
     try {
         const pool = await sql.connect(dbConfig);
         await pool.request().query('SELECT 1');
         dbStatus = 'ONLINE';
     } catch (e) { /* ignore */ }
+
+    // Check AI details if orchestrator loaded
+    if (global.aiOrchestrator) {
+        aiStatus.director.model = global.aiOrchestrator.director?.model || 'N/A';
+        aiStatus.workhorse.model = global.aiOrchestrator.workhorse?.model || 'N/A';
+
+        // We use the cached check result or verify? 
+        // For /status, we return the LAST KNOWN check result to be fast
+        if (PreFlightChecks.llm) {
+            aiStatus.director.status = 'ONLINE'; // Simplified for now, real check is async
+            aiStatus.workhorse.status = 'ONLINE';
+        } else {
+            aiStatus.director.status = 'CHECKING/FAULT';
+            aiStatus.workhorse.status = 'CHECKING/FAULT';
+        }
+    }
 
     // Get IP
     const nets = os.networkInterfaces();
@@ -479,8 +631,10 @@ app.get('/api/v1/admin/status', async (req, res) => {
 
     res.json({
         dbStatus,
+        aiStatus,
         serverMode: global.SERVER_MODE || 'ONLINE',
-        ip: process.env.GAME_URL || `http://${serverIp}${urlPort}`
+        ip: serverIp + urlPort,
+        checks: PreFlightChecks
     });
 });
 
@@ -523,10 +677,127 @@ app.post('/api/v1/admin/config', async (req, res) => {
     }
 });
 
+// AI: Fetch Models
+app.post('/api/v1/admin/ai/models', async (req, res) => {
+    const { provider, key, url } = req.body;
+    try {
+        const models = await aiOrchestrator.fetchModels(provider, key, url);
+        res.json(models);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// AI: Verify Configuration
+app.post('/api/v1/admin/ai/verify', async (req, res) => {
+    const { role } = req.body; // 'director' or 'workhorse'
+
+    // Create a temporary orchestrator with the submitted config to test BEFORE saving
+    // Or, if saving first, just verify against current config. 
+    // The requirement implies verifying the *selected* model, which might not be saved yet.
+    // Let's assume we pass the full config to verify?
+    // Actually simplicity: Update config first, then verify.
+    // OR: Temporarily update orchestrator for this request? 
+
+    // Better path: The Orchestrator verification method verifies CURRENT config.
+    // UI should Save -> Then Verify.
+
+    try {
+        const result = await aiOrchestrator.verifyProvider(role);
+        if (result.success) {
+            res.json({ success: true, message: result.message });
+        } else {
+            res.status(400).json({ success: false, error: result.error });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Admin: Mission Control APIs ---
+
+// List Available Stories
+app.get('/api/v1/admin/stories', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query('SELECT WorldID, Name, Description FROM Worlds ORDER BY CreatedAt DESC');
+        res.json(result.recordset);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Schedule/Start Game
+app.post('/api/v1/admin/game/schedule', async (req, res) => {
+    // 1. Enforce Pre-flight
+    if (!PreFlightChecks.sql || !PreFlightChecks.llm) {
+        return res.status(503).json({ error: 'System Pre-flight Checks Failed. Cannot start mission.' });
+    }
+
+    // 2. Enforce Single Session
+    if (GameScheduler.status === 'RUNNING' || GameScheduler.status === 'WAITING') {
+        return res.status(409).json({ error: 'Mission already in progress. Abort current mission first.' });
+    }
+
+    const { worldId, startTime, durationMinutes } = req.body;
+    // startTime is ISO string. If null/undefined, start NOW.
+
+    if (!worldId) return res.status(400).json({ error: 'World ID required' });
+
+    try {
+        const start = startTime ? new Date(startTime) : new Date();
+        const duration = (durationMinutes || 30) * 60000; // minutes to ms
+        const end = new Date(start.getTime() + duration);
+
+        GameScheduler.worldId = worldId;
+        GameScheduler.startTime = start;
+        GameScheduler.endTime = end;
+        GameScheduler.status = 'WAITING'; // Process loop will pick it up
+
+        logToBuffer(`Mission Scheduled: World ${worldId} at ${start.toLocaleTimeString()}`, 'INFO');
+        res.json({ success: true, message: 'Mission Scheduled' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Stop/Abort Game
+app.post('/api/v1/admin/game/stop', async (req, res) => {
+    if (GameScheduler.status === 'IDLE' || GameScheduler.status === 'COMPLETED') {
+        return res.status(400).json({ error: 'No active mission to abort.' });
+    }
+
+    await GameScheduler.completeSession();
+    // Force status to completed immediately if scheduler loop is slow
+    GameScheduler.status = 'COMPLETED';
+
+    logToBuffer('Mission Aborted by Admin', 'WARN');
+    res.json({ success: true, message: 'Mission Aborted' });
+});
+
+app.get('/api/v1/admin/game/status', (req, res) => {
+    res.json({
+        status: GameScheduler.status,
+        timer: GameScheduler.timer,
+        worldId: GameScheduler.worldId,
+        startTime: GameScheduler.startTime,
+        sessionId: GameScheduler.sessionId,
+        checks: {
+            sql: PreFlightChecks.sql,
+            llm: PreFlightChecks.llm
+        }
+    });
+});
+
+// -----------------------------------
+
 // GET /api/v1/state - Returns Zone A (World) and Zone C (Status)
 app.get('/api/v1/state', authenticate, async (req, res) => {
     try {
         const state = await gameEngine.getPlayerState(req.player.PlayerID);
+        // Inject Scheduler State
+        state.systemStatus = GameScheduler.status;
+        state.missionTimer = GameScheduler.timer;
         res.json(state);
     } catch (err) {
         console.error('State error:', err);
@@ -570,6 +841,10 @@ app.listen(PORT, async () => {
         try {
             const pool = await sql.connect(dbConfig);
             logToBuffer('Connected to SQL Cluster.');
+
+            // CLEAR LOGS ON BOOT (Fresh Start)
+            await pool.request().query('DELETE FROM SystemLogs');
+            logToBuffer('System Logs cleared for fresh boot.', 'INFO');
 
             // Auto-ingest initial story if Worlds table is empty
             const worlds = await pool.request().query('SELECT COUNT(*) as count FROM Worlds');

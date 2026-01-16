@@ -59,16 +59,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Game Loop
     let lastComms = [];
+    let pollingInterval = null;
 
     async function startPolling() {
-        setInterval(async () => {
-            await fetchState();
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(async () => {
+            const state = await fetchState();
             await fetchComms();
+
+            // Handle Global Game States
+            if (state && state.systemStatus === 'WAITING') {
+                showOverlay(`MISSION STANDBY<br>T-MINUS ${state.missionTimer} SECONDS`);
+            } else if (state && state.systemStatus === 'COMPLETED') {
+                showOverlay('MISSION COMPLETE<br>CONNECTION TERMINATED');
+            } else {
+                hideOverlay();
+            }
+
         }, 2000); // 2s Tick
 
-        // Initial Fetch
-        await fetchState();
-        await fetchComms();
+        await fetchState(); // Initial
+    }
+
+    // Helper for Wait/End Screens
+    function showOverlay(html) {
+        let ov = document.getElementById('status-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'status-overlay';
+            ov.style = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);color:lime;display:flex;align-items:center;justify-content:center;text-align:center;font-size:2em;z-index:999;border:4px solid lime;';
+            document.body.appendChild(ov);
+        }
+        ov.innerHTML = html;
+        ov.style.display = 'flex';
+    }
+
+    function hideOverlay() {
+        const ov = document.getElementById('status-overlay');
+        if (ov) ov.style.display = 'none';
     }
 
     async function fetchState() {
@@ -81,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = await res.json();
                 renderZoneA(data.zoneA);
                 renderZoneC(data.zoneC);
+                return data; // Return full state for loop to check systemStatus
             }
         } catch (e) { console.warn('State fetch failed', e); }
     }

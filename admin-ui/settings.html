@@ -9,6 +9,38 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Orbitron:wght@400;700&display=swap"
         rel="stylesheet">
+    <style>
+        .ai-card {
+            margin-bottom: 2rem;
+            border-left: 4px solid #333;
+            padding-left: 1rem;
+        }
+
+        .ai-director {
+            border-left-color: var(--accent-color);
+        }
+
+        .ai-workhorse {
+            border-left-color: var(--secondary-color);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .success {
+            background: rgba(0, 255, 0, 0.2);
+            color: #0f0;
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #f00;
+        }
+    </style>
 </head>
 
 <body class="admin-body">
@@ -32,175 +64,297 @@
                 <h2>Settings</h2>
                 <p style="font-size: 0.9rem; color: #888; margin: 0.5rem 0 0 0;">Engine Configuration & Security</p>
             </div>
+            <button class="btn-primary" id="saveAllBtn">SAVE ALL CHANGES</button>
         </header>
+        <div id="globalStatus" style="height: 20px; text-align: right; font-size: 0.9rem;"></div>
 
         <section class="generator-section">
-            <h2 style="color: var(--text-primary); margin-top: 0;">Operational Controls</h2>
 
-            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
-                <h3 style="color: var(--text-secondary);">Server Mode</h3>
-                <p style="font-size: 0.9rem; margin-bottom: 1rem; color: #888;">Controls player access to the game
-                    server.</p>
+            <!-- DIRECTOR -->
+            <div class="stat-card ai-card ai-director" style="text-align: left;">
+                <h3 style="color: var(--accent-color); display: flex; justify-content: space-between;">
+                    The "Director" (High Intelligence) <span id="directorStatus"></span>
+                </h3>
+                <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">Handles Story Generation, Adjudication,
+                    and Logic.</p>
+
                 <div class="form-group">
-                    <select id="server_mode" class="admin-select">
-                        <option value="ONLINE">ONLINE (Active)</option>
-                        <option value="OFFLINE">OFFLINE (Maintenance)</option>
+                    <label>Provider</label>
+                    <select id="director_provider" class="admin-select" onchange="updateForm('director')">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter.ai</option>
+                        <option value="ollama">Ollama (Local)</option>
                     </select>
                 </div>
-                <button class="btn-primary" id="saveModeBtn"
-                    style="font-size: 0.8rem; padding: 0.8rem;">UPDATE_MODE</button>
+
+                <div class="form-group" id="group_director_key">
+                    <label>API Key</label>
+                    <input type="password" id="director_key" placeholder="API Key">
+                </div>
+                <div class="form-group" id="group_director_url" style="display:none;">
+                    <label>URL</label>
+                    <input type="text" id="director_url" value="http://ollama:11434">
+                </div>
+
+                <div class="form-group">
+                    <label>Model</label>
+                    <select id="director_model" class="admin-select"></select>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn-primary" style="background: #444; font-size: 0.8rem; flex: 1;"
+                        onclick="fetchModels('director')">FETCH MODELS</button>
+                    <button class="btn-primary" style="background: #333; font-size: 0.8rem; flex: 1;"
+                        onclick="verify('director')">VERIFY CONNECTION</button>
+                </div>
             </div>
 
-            <h2 style="color: var(--text-primary); margin-top: 2rem;">Security</h2>
-            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
+            <!-- WORKHORSE -->
+            <div class="stat-card ai-card ai-workhorse" style="text-align: left;">
+                <h3 style="color: var(--secondary-color); display: flex; justify-content: space-between;">
+                    The "Workhorse" (Speed/Volume) <span id="workhorseStatus"></span>
+                </h3>
+                <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">Handles NPC Dialogue, Room Descriptions,
+                    and Chatter.</p>
+
+                <div class="form-group">
+                    <label>Provider</label>
+                    <select id="workhorse_provider" class="admin-select" onchange="updateForm('workhorse')">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter.ai</option>
+                        <option value="ollama">Ollama (Local)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="group_workhorse_key">
+                    <label>API Key</label>
+                    <input type="password" id="workhorse_key" placeholder="API Key">
+                </div>
+                <div class="form-group" id="group_workhorse_url" style="display:none;">
+                    <label>URL</label>
+                    <input type="text" id="workhorse_url" value="http://ollama:11434">
+                </div>
+
+                <div class="form-group">
+                    <label>Model</label>
+                    <select id="workhorse_model" class="admin-select"></select>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn-primary" style="background: #444; font-size: 0.8rem; flex: 1;"
+                        onclick="fetchModels('workhorse')">FETCH MODELS</button>
+                    <button class="btn-primary" style="background: #333; font-size: 0.8rem; flex: 1;"
+                        onclick="verify('workhorse')">VERIFY CONNECTION</button>
+                </div>
+            </div>
+
+            <h2 style="color: var(--text-primary); margin-top: 2rem;">Operational & Security</h2>
+            <div class="stat-card" style="text-align: left;">
+                <div style="display: flex; gap: 1rem;">
+                    <div class="form-group" style="flex:1;">
+                        <label>Server Mode</label>
+                        <select id="server_mode" class="admin-select">
+                            <option value="ONLINE">ONLINE (Active)</option>
+                            <option value="OFFLINE">OFFLINE (Maintenance)</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Change Admin Password</label>
-                    <input type="password" id="new_password" placeholder="New Password (min 8 chars)">
-                </div>
-                <button class="btn-primary" id="changePassBtn"
-                    style="font-size: 0.8rem; padding: 0.8rem; background: var(--danger); color: #fff;">UPDATE_PASSWORD</button>
-            </div>
-
-            <h2 style="color: var(--text-primary); margin-top: 2rem;">AI Providers</h2>
-
-            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
-                <div class="form-group">
-                    <label>Google Gemini API Key (Director)</label>
-                    <input type="password" id="gemini_key" placeholder="AI Studio Key">
-                </div>
-
-                <div class="form-group">
-                    <label>OpenRouter API Key (Workhorse Cloud)</label>
-                    <input type="password" id="openrouter_key" placeholder="sk-or-...">
-                </div>
-
-                <div class="form-group">
-                    <label>Ollama URL (Workhorse Local)</label>
-                    <input type="text" id="ollama_url" value="http://ollama:11434">
+                    <div style="display: flex; gap: 1rem;">
+                        <input type="password" id="new_password" placeholder="New Password">
+                        <button class="btn-primary" id="changePassBtn"
+                            style="width: auto; background: var(--danger);">UPDATE</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="stat-card" style="text-align: left;">
-                <h3 style="color: var(--text-secondary);">Model Routing</h3>
-                <div class="form-group">
-                    <label>Workhorse Preference</label>
-                    <select id="workhorse_pref" class="admin-select">
-                        <option value="ollama">Local (Ollama)</option>
-                        <option value="openrouter">Cloud (OpenRouter)</option>
-                    </select>
-                </div>
-            </div>
-
-            <button class="btn-primary" id="saveBtn" style="margin-top: 2rem;">SAVE_CONFIG</button>
-            <div id="saveStatus" style="margin-top: 1rem; font-size: 0.8rem;"></div>
         </section>
     </main>
 
     <script>
-        const saveBtn = document.getElementById('saveBtn');
-        const status = document.getElementById('saveStatus');
+        // State
+        const configKeys = {
+            director: ['AI_DIRECTOR_PROVIDER', 'AI_DIRECTOR_KEY', 'AI_DIRECTOR_URL', 'AI_DIRECTOR_MODEL'],
+            workhorse: ['AI_WORKHORSE_PROVIDER', 'AI_WORKHORSE_KEY', 'AI_WORKHORSE_URL', 'AI_WORKHORSE_MODEL']
+        };
 
-        // Initial Load
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/v1/admin/config');
-                const config = await response.json();
+        // --- Logic ---
 
-                document.getElementById('gemini_key').value = config.GEMINI_API_KEY || '';
-                document.getElementById('openrouter_key').value = config.OPENROUTER_API_KEY || '';
-                document.getElementById('ollama_url').value = config.OLLAMA_URL || 'http://ollama:11434';
-                document.getElementById('workhorse_pref').value = config.WORKHORSE_PREF || 'ollama';
-            } catch (err) {
-                console.error("Load failed", err);
+        function updateForm(role) {
+            const provider = document.getElementById(`${role}_provider`).value;
+            const keyGroup = document.getElementById(`group_${role}_key`);
+            const urlGroup = document.getElementById(`group_${role}_url`);
+
+            if (provider === 'ollama') {
+                keyGroup.style.display = 'none';
+                urlGroup.style.display = 'block';
+            } else {
+                keyGroup.style.display = 'block';
+                urlGroup.style.display = 'none';
             }
         }
 
-        saveBtn.onclick = async () => {
-            const data = {
-                GEMINI_API_KEY: document.getElementById('gemini_key').value,
-                OPENROUTER_API_KEY: document.getElementById('openrouter_key').value,
-                OLLAMA_URL: document.getElementById('ollama_url').value,
-                WORKHORSE_PREF: document.getElementById('workhorse_pref').value
-            };
+        async function fetchModels(role) {
+            const provider = document.getElementById(`${role}_provider`).value;
+            const key = document.getElementById(`${role}_key`).value;
+            const url = document.getElementById(`${role}_url`).value;
+            const select = document.getElementById(`${role}_model`);
 
-            status.innerText = "> Syncing with SQL Cluster...";
+            select.innerHTML = '<option>Loading...</option>';
 
             try {
-                const response = await fetch('/api/v1/admin/config', {
+                const res = await fetch('/api/v1/admin/ai/models', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({ provider, key, url })
                 });
 
-                if (response.ok) {
-                    status.innerText = "> Configuration baked successfully.";
-                    status.style.color = "var(--text-accent)";
-                } else {
-                    status.innerText = "> Error: Sync failed.";
-                    status.style.color = "var(--danger)";
-                }
-            } catch (err) {
-                status.innerText = "> Critical: Network error.";
-            }
-        };
-
-        // Server Mode Logic
-        const saveModeBtn = document.getElementById('saveModeBtn');
-        const changePassBtn = document.getElementById('changePassBtn');
-
-        async function loadServerMode() {
-            try {
-                const response = await fetch('/api/v1/admin/server-mode');
-                const data = await response.json();
-                document.getElementById('server_mode').value = data.mode;
-            } catch (err) { console.error(err); }
-        }
-
-        saveModeBtn.onclick = async () => {
-            const mode = document.getElementById('server_mode').value;
-            await fetch('/api/v1/admin/server-mode', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode })
-            });
-            alert('Server Mode Updated');
-        };
-
-        changePassBtn.onclick = async () => {
-            const newPassword = document.getElementById('new_password').value;
-            if (confirm('Are you sure you want to change the Admin Password? You will be logged out.')) {
-                const res = await fetch('/api/v1/admin/password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ newPassword })
-                });
                 if (res.ok) {
-                    window.location.href = '/admin/logout';
+                    const models = await res.json();
+                    select.innerHTML = '';
+                    models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m;
+                        opt.innerText = m;
+                        select.appendChild(opt);
+                    });
                 } else {
-                    alert('Failed to update password');
+                    const err = await res.json();
+                    alert('Error: ' + err.error);
+                    select.innerHTML = '<option value="">Failed to load</option>';
                 }
+            } catch (e) {
+                alert('Network Error');
             }
-        };
+        }
 
-        loadConfig();
-        loadServerMode();
+        async function verify(role) {
+            // Must save first to verify serverside efficiently, or just rely on session config?
+            // User requested explicit check button.
+            // Let's save the config first so server is aware.
+            await saveAll(false);
+
+            const statusSpan = document.getElementById(`${role}Status`);
+            statusSpan.innerHTML = '<span class="status-badge" style="background:#555">Verifying...</span>';
+
+            try {
+                const res = await fetch('/api/v1/admin/ai/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    statusSpan.innerHTML = '<span class="status-badge success">✓ VERIFIED</span>';
+                } else {
+                    statusSpan.innerHTML = '<span class="status-badge error">✕ FAILED</span>';
+                    alert(data.error);
+                }
+            } catch (e) {
+                statusSpan.innerHTML = '<span class="status-badge error">✕ ERROR</span>';
+            }
+        }
+
+        async function saveAll(showStatus = true) {
+            const status = document.getElementById('globalStatus');
+            if (showStatus) status.innerText = "Saving...";
+
+            const payload = {};
+
+            // Collect Director
+            payload.AI_DIRECTOR_PROVIDER = document.getElementById('director_provider').value;
+            payload.AI_DIRECTOR_KEY = document.getElementById('director_key').value;
+            payload.AI_DIRECTOR_URL = document.getElementById('director_url').value;
+            payload.AI_DIRECTOR_MODEL = document.getElementById('director_model').value;
+
+            // Collect Workhorse
+            payload.AI_WORKHORSE_PROVIDER = document.getElementById('workhorse_provider').value;
+            payload.AI_WORKHORSE_KEY = document.getElementById('workhorse_key').value;
+            payload.AI_WORKHORSE_URL = document.getElementById('workhorse_url').value;
+            payload.AI_WORKHORSE_MODEL = document.getElementById('workhorse_model').value;
+
+            // Server Mode
+            payload.SERVER_MODE = document.getElementById('server_mode').value;
+
+            try {
+                const res = await fetch('/api/v1/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (showStatus) {
+                    if (res.ok) {
+                        status.innerText = "Configuration Saved & Synced.";
+                        status.style.color = "#0f0";
+                        setTimeout(() => status.innerText = '', 3000);
+                    } else {
+                        status.innerText = "Save Failed.";
+                        status.style.color = "#f00";
+                    }
+                }
+            } catch (e) {
+                if (showStatus) status.innerText = "Network Error.";
+            }
+        }
+
+        document.getElementById('saveAllBtn').onclick = () => saveAll(true);
+
+        // Load Data
+        async function load() {
+            try {
+                const res = await fetch('/api/v1/admin/config');
+                const conf = await res.json();
+
+                // Defaults if empty
+                const dirProv = conf.AI_DIRECTOR_PROVIDER || 'gemini';
+                document.getElementById('director_provider').value = dirProv;
+                document.getElementById('director_key').value = conf.AI_DIRECTOR_KEY || conf.GEMINI_API_KEY || '';
+                document.getElementById('director_url').value = conf.AI_DIRECTOR_URL || '';
+
+                // Manually add current model if list empty
+                if (conf.AI_DIRECTOR_MODEL) {
+                    const split = document.getElementById('director_model');
+                    const opt = document.createElement('option');
+                    opt.value = conf.AI_DIRECTOR_MODEL;
+                    opt.innerText = conf.AI_DIRECTOR_MODEL;
+                    split.appendChild(opt);
+                    split.value = conf.AI_DIRECTOR_MODEL;
+                }
+                updateForm('director');
+
+
+                // Workhorse
+                const worProv = conf.AI_WORKHORSE_PROVIDER || 'ollama';
+                document.getElementById('workhorse_provider').value = worProv;
+                document.getElementById('workhorse_key').value = conf.AI_WORKHORSE_KEY || conf.OPENROUTER_API_KEY || '';
+                document.getElementById('workhorse_url').value = conf.AI_WORKHORSE_URL || conf.OLLAMA_URL || 'http://ollama:11434';
+
+                if (conf.AI_WORKHORSE_MODEL) {
+                    const split = document.getElementById('workhorse_model');
+                    const opt = document.createElement('option');
+                    opt.value = conf.AI_WORKHORSE_MODEL;
+                    opt.innerText = conf.AI_WORKHORSE_MODEL;
+                    split.appendChild(opt);
+                    split.value = conf.AI_WORKHORSE_MODEL;
+                }
+                updateForm('workhorse');
+
+                document.getElementById('server_mode').value = conf.SERVER_MODE || 'ONLINE';
+
+            } catch (e) { console.error(e); }
+        }
+
+        load();
+
     </script>
     <footer class="admin-footer">
         <div class="footer-content">
-            <div class="footer-logo">Made in The Republic of Texas</div>
-
-            <div class="credits">
-                Engine Architect: <strong>Mike Kelley</strong><br>
-                Core: <strong>Google Gemini</strong> | <strong>Google Antigravity</strong> | <strong>SQL Server
-                    2025</strong>
-            </div>
-            <div class="links">
-                <a href="https://playertxt.org" target="_blank">Official Project Website</a>
-            </div>
-            <div class="copyright">
-                &copy; 2026 PlayerTXT Protocol. Open Source License. Portions &copy; 1980 Retro-Vibe.
-            </div>
+            <div class="copyright">&copy; 2026 PlayerTXT Protocol</div>
         </div>
     </footer>
+</body>
 
 </html>

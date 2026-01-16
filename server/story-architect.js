@@ -1,5 +1,3 @@
-const axios = require('axios');
-
 /**
  * StoryArchitect - Uses Google Gemini to generate structured Story Packets
  */
@@ -39,11 +37,22 @@ class StoryArchitect {
         };
 
         try {
-            const response = await axios.post(this.apiUrl, payload);
-            const content = response.data.candidates[0].content.parts[0].text;
+            const response = await fetch(this.apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || response.statusText);
+            }
+
+            const data = await response.json();
+            constcontent = data.candidates[0].content.parts[0].text;
             return JSON.parse(content);
         } catch (err) {
-            console.error('Gemini Generation failed:', err.response?.data || err.message);
+            console.error('Gemini Generation failed:', err.message);
             throw new Error('Failed to generate story via Gemini');
         }
     }
