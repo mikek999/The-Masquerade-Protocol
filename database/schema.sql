@@ -116,6 +116,7 @@ CREATE TABLE WorldFacts (
     EntityID INT, -- RoomID or ItemID
     Attribute NVARCHAR(50) NOT NULL, -- Color, Smell, Texture
     Value NVARCHAR(MAX) NOT NULL,
+    FactVector VECTOR(1536), -- SQL 2025 Vector support
     CreatedAt DATETIME DEFAULT GETDATE()
 );
 

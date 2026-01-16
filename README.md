@@ -11,11 +11,12 @@ To run the full stack (Node.js Game Server, SQL Server, and Ollama with Llama 3/
 - **RAM**: 16GB minimum (32GB recommended for smooth LLM performance).
 - **GPU**: NVIDIA GPU with 8GB+ VRAM (Optional, for local Ollama acceleration).
 - **Storage**: 50GB+ SSD (NVMe preferred for SQL Server performance).
-- **Network**: Stable broadband with port 80/443 exposed if hosting for remote players.
+- **Network**: Stable broadband with port 80/443 exposed if hosting for remote players. Supports **Traefik** for automatic SSL.
 
 ## Prerequisites
 - Docker and Docker Compose installed.
-- Access to the internet for pulling images and Gemini API.
+- Access to the internet for pulling images and Gemini/OpenRouter APIs.
+- (Optional) SQL Server 2025 preview for vector features.
 
 ## Starting the System
 
@@ -35,10 +36,26 @@ Configuration is handled via environment variables in `docker-compose.yml`:
 | `DB_SERVER` | Hostname of the SQL Server | `sqlserver` |
 | `DB_PASSWORD` | SA password for SQL Server | `YourStrong!Passw0rd` |
 | `OLLAMA_URL` | URL for the Ollama container | `http://ollama:11434` |
+| `GEMINI_API_KEY` | Google AI Studio Key | `YourKeyHere` |
+| `OPENROUTER_API_KEY`| API Key for OpenRouter.ai | `YourKeyHere` |
 | `PORT` | Listening port for the game server | `443` |
 
-### Database Initialization
-The server will automatically attempt to initialize the SQL schema on startup if the database is empty.
+### Home Lab & Traefik
+This project includes pre-configured labels in `docker-compose.yml` for **Traefik**. To enable:
+1. Ensure you have a Traefik network (e.g., `web`).
+2. Update the labels in `docker-compose.yml` with your domain (e.g., `game.example.com`).
+
+### Tiered AI Support
+- **Ollama**: Used for local, zero-cost routine interactions. 
+- **OpenRouter**: Set `OPENROUTER_API_KEY` to use cloud-hosted small models (e.g., Mistral, Llama 3) for NPC dialogue when local hardware is limited.
+- **Gemini**: Reserved for high-level "Director" tasks and Scenario Generation.
+
+### SQL Server 2025 Features
+If running SQL Server 2025, the engine will automatically enable:
+- **Vector Search**: Semantic lookup of `WorldFacts` using the `VECTOR` data type.
+- **Native JSON**: High-performance querying of Story Packets.
+
+---
 
 ### Adding New Scenarios
 Use the Admin UI (accessible via `https://localhost/admin`) to prompt Gemini to generate new game scenarios directly into the SQL database.

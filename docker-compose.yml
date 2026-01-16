@@ -33,9 +33,25 @@ services:
       - DB_USER=sa
       - DB_PASSWORD=YourStrong!Passw0rd
       - OLLAMA_URL=http://ollama:11434
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
       - sqlserver
       - ollama
+    networks:
+      - masquerade_net
+      - traefik_net # Connect to your existing traefik network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.masquerade.rule=Host(`game.mikekelleytx.com`)"
+      - "traefik.http.routers.masquerade.entrypoints=websecure"
+      - "traefik.http.routers.masquerade.tls.certresolver=myresolver"
+      - "traefik.http.services.masquerade.loadbalancer.server.port=443"
+
+networks:
+  masquerade_net:
+  traefik_net:
+    external: true
 
 volumes:
   mssql_data:

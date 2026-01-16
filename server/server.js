@@ -9,6 +9,7 @@ require('dotenv').config();
 const GameEngine = require('./game-logic');
 const StoryInjestor = require('./story-injestor');
 const ScenarioArchitect = require('./scenario-architect');
+const AIOrchestrator = require('./ai-orchestrator');
 const fs = require('fs');
 const path = require('path');
 
@@ -27,8 +28,15 @@ const dbConfig = {
     }
 };
 
+// Initialize AI Orchestrator
+const aiOrchestrator = new AIOrchestrator({
+    geminiKey: process.env.GEMINI_API_KEY,
+    openRouterKey: process.env.OPENROUTER_API_KEY,
+    ollamaUrl: process.env.OLLAMA_URL
+});
+
 // Initialize Game Engine
-const gameEngine = new GameEngine(dbConfig);
+const gameEngine = new GameEngine(dbConfig, aiOrchestrator);
 
 // Middleware
 app.use(helmet({

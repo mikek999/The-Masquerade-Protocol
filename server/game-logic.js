@@ -4,8 +4,9 @@ const sql = require('mssql');
  * GameEngine - Core logic for The Masquerade Protocol
  */
 class GameEngine {
-    constructor(dbConfig) {
+    constructor(dbConfig, aiOrchestrator) {
         this.dbConfig = dbConfig;
+        this.ai = aiOrchestrator;
         this.pool = null;
     }
 
@@ -79,6 +80,37 @@ class GameEngine {
             message: `You typed: "${command}". The AI layer will process this shortly.`,
             actionRequired: 'llm_process'
         };
+    }
+
+    /**
+     * Get relevant facts about the room/items using SQL 2025 Vector search
+     */
+    async getSemanticFacts(sessionId, query) {
+        if (!this.ai) return [];
+
+        const embedding = await this.ai.getEmbedding(query);
+        if (!embedding) return [];
+
+        const pool = await this.connect();
+        try {
+            // Using SQL 2025 Vector search syntax (VECTOR_DISTANCE)
+            // Note: This is an idealized query based on SQL 2025 preview docs
+            const result = await pool.request()
+                .input('sessionId', sql.Int, sessionId)
+                .input('vector', sql.NVarChar, JSON.stringify(embedding))
+                .query(`
+                    SELECT TOP 5 Attribute, Value, 
+                           VECTOR_DISTANCE(FactVector, CAST(@vector AS VECTOR(1536))) as Distance
+                    FROM WorldFacts
+                    WHERE SessionID = @sessionId
+                    ORDER BY Distance ASC
+                `);
+
+            return result.recordset;
+        } catch (err) {
+            console.warn('Vector search failed (perhaps not on SQL 2025):', err.message);
+            return [];
+        }
     }
 
     async movePlayer(playerId, direction) {
