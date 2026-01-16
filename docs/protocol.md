@@ -1,11 +1,11 @@
-# The Masquerade Protocol: Client Communication Standard
+# The PlayerTXT Protocol: Client Communication Standard
 
 This document outlines the REST API for third-party client developers (retro computers, terminal emulators, etc.).
 
 ## Base Configuration
 - **Port**: 80 (HTTP) or 443 (HTTPS)
 - **Format**: JSON payloads
-- **Auth**: Cookie-based (`masquerade_session`)
+- **Auth**: Cookie-based (`playertxt_session`)
 
 ## Endpoints
 

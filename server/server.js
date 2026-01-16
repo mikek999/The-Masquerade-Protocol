@@ -105,12 +105,107 @@ app.use('/admin', (req, res, next) => {
     if (req.path === '/' || req.path === '' || req.path.endsWith('.html')) {
         return res.send(`
             <html>
-            <body style="background:#000; color:#00ff9d; font-family:monospace; display:flex; align-items:center; justify-content:center; height:100vh;">
-                <form method="POST" action="/admin/login">
-                    <h2>ADMIN ACCESS REQUIRED</h2>
-                    <input type="password" name="password" placeholder="ACCESS_KEY" style="background:#000; border:1px solid #00ff9d; color:#00ff9d; padding:10px;" id="accessKey">
-                    <button type="submit" style="background:#00ff9d; color:#000; border:none; padding:10px; cursor:pointer;">VERIFY</button>
-                </form>
+            <head>
+                <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+                <style>
+                    body {
+                        background: radial-gradient(circle at center, #111, #000);
+                        color: #fff;
+                        font-family: 'Outfit', sans-serif;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        margin: 0;
+                        overflow: hidden;
+                    }
+                    .login-card {
+                        background: rgba(20, 20, 20, 0.8);
+                        backdrop-filter: blur(20px);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        padding: 3rem;
+                        border-radius: 20px;
+                        text-align: center;
+                        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+                        max-width: 400px;
+                        width: 90%;
+                    }
+                    .logo-box {
+                        margin-bottom: 2rem;
+                    }
+                    .logo-box img {
+                        width: 100px;
+                        margin-bottom: 1rem;
+                    }
+                    h2 {
+                        font-family: 'Orbitron', sans-serif;
+                        font-size: 1.5rem;
+                        letter-spacing: 3px;
+                        margin-bottom: 0.5rem;
+                        color: #00ff9d;
+                    }
+                    .slogan {
+                        font-size: 0.9rem;
+                        color: #888;
+                        margin-bottom: 2rem;
+                        display: block;
+                    }
+                    input {
+                        width: 100%;
+                        background: rgba(0,0,0,0.5);
+                        border: 1px solid rgba(0, 255, 157, 0.3);
+                        color: #00ff9d;
+                        padding: 1rem;
+                        margin-bottom: 1.5rem;
+                        border-radius: 8px;
+                        font-family: 'Space Mono', monospace;
+                        text-align: center;
+                        font-size: 1.1rem;
+                        outline: none;
+                        transition: border-color 0.3s;
+                    }
+                    input:focus {
+                        border-color: #00ff9d;
+                    }
+                    button {
+                        width: 100%;
+                        background: #00ff9d;
+                        color: #000;
+                        border: none;
+                        padding: 1rem;
+                        font-family: 'Orbitron', sans-serif;
+                        font-weight: bold;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        text-transform: uppercase;
+                        letter-spacing: 2px;
+                        transition: transform 0.2s;
+                    }
+                    button:hover {
+                        transform: scale(1.05);
+                    }
+                    .version {
+                        position: absolute;
+                        bottom: 2rem;
+                        font-size: 0.7rem;
+                        color: #444;
+                        font-family: monospace;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="login-card">
+                    <div class="logo-box">
+                        <img src="/admin/logo.png" alt="PlayerTXT Logo">
+                        <h2>PLAYER <span>TXT</span></h2>
+                        <span class="slogan">Your Imagination, Powered by AI.</span>
+                    </div>
+                    <form method="POST" action="/admin/login">
+                        <input type="password" name="password" placeholder="ACCESS_KEY" id="accessKey">
+                        <button type="submit">ACCESS ENGINE</button>
+                    </form>
+                </div>
+                <div class="version">PlayerTXT Game Engine v1.0.0 | Security Tier: EXTREME</div>
             </body>
             </html>
         `);
@@ -124,7 +219,7 @@ app.use('/admin', express.static(path.join(__dirname, '../admin-ui')));
 
 // Auth Middleware
 async function authenticate(req, res, next) {
-    const token = req.cookies.masquerade_session;
+    const token = req.cookies.playertxt_session;
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
@@ -186,7 +281,7 @@ app.post('/api/v1/login', async (req, res) => {
             .input('token', sql.NVarChar, sessionToken)
             .query('UPDATE Players SET SessionCookie = @token, LastSeen = GETDATE() WHERE PlayerID = @playerId');
 
-        res.cookie('masquerade_session', sessionToken, {
+        res.cookie('playertxt_session', sessionToken, {
             httpOnly: true,
             secure: false, // Set to true if using HTTPS in production
             sameSite: 'lax'
@@ -351,7 +446,7 @@ app.get('/api/v1/state', authenticate, async (req, res) => {
 app.get('/api/v1/comms', authenticate, async (req, res) => {
     res.json({
         zoneB: [
-            { source: 'System', message: 'Welcome to The Masquerade Protocol.' }
+            { source: 'System', message: 'Welcome to the PlayerTXT Protocol.' }
         ]
     });
 });
