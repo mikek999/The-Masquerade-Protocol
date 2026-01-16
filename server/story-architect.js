@@ -1,9 +1,9 @@
 const axios = require('axios');
 
 /**
- * ScenarioArchitect - Uses Google Gemini to generate structured Story Packets
+ * StoryArchitect - Uses Google Gemini to generate structured Story Packets
  */
-class ScenarioArchitect {
+class StoryArchitect {
     constructor(apiKey) {
         this.apiKey = apiKey;
         this.apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${this.apiKey}`;
@@ -44,9 +44,9 @@ class ScenarioArchitect {
             return JSON.parse(content);
         } catch (err) {
             console.error('Gemini Generation failed:', err.response?.data || err.message);
-            throw new Error('Failed to generate scenario via Gemini');
+            throw new Error('Failed to generate story via Gemini');
         }
     }
 }
 
-module.exports = ScenarioArchitect;
+module.exports = StoryArchitect;

@@ -4,11 +4,12 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cors = require('cors');
 const sql = require('mssql');
+const os = require('os');
 require('dotenv').config();
 
 const GameEngine = require('./game-logic');
 const StoryInjestor = require('./story-injestor');
-const ScenarioArchitect = require('./scenario-architect');
+const StoryArchitect = require('./story-architect');
 const AIOrchestrator = require('./ai-orchestrator');
 const fs = require('fs');
 const path = require('path');
@@ -74,23 +75,36 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Serve Admin UI with basic protection
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PlayerTXT2026!';
+// Serve Admin UI with basic protection
+// Load dynamic config from global if set, else env
+global.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PlayerTXT2026!';
+global.SERVER_MODE = 'ONLINE';
 
 // Admin Login Handler (must be before the auth check to avoid loops)
 app.post('/admin/login', express.urlencoded({ extended: true }), (req, res) => {
     const { password } = req.body;
-    if (password === ADMIN_PASSWORD) {
-        res.cookie('admin_session', ADMIN_PASSWORD, { httpOnly: true });
+
+    // Refresh ADMIN_PASSWORD from config in case it changed
+    if (password === (global.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'PlayerTXT2026!')) {
+        res.cookie('admin_session', global.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'PlayerTXT2026!', { httpOnly: true });
         res.redirect('/admin/index.html');
     } else {
         res.status(403).send('ACCESS DENIED');
     }
 });
 
+app.all('/admin/logout', (req, res) => {
+    res.clearCookie('admin_session');
+    res.redirect('/admin/index.html');
+});
+
 app.use('/admin', (req, res, next) => {
     // 1. Check for valid session
     const auth = req.cookies.admin_session;
-    if (auth === ADMIN_PASSWORD) {
+    // Check against global dynamic password
+    const currentPass = global.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'PlayerTXT2026!';
+
+    if (auth === currentPass) {
         // If they just hit /admin, redirect to index.html to be sure
         if (req.path === '/' || req.path === '') {
             return res.redirect('/admin/index.html');
@@ -249,6 +263,11 @@ app.get('/health', (req, res) => {
 app.post('/api/v1/login', async (req, res) => {
     const { username } = req.body;
 
+    // Check Server Mode
+    if (global.SERVER_MODE === 'OFFLINE') {
+        return res.status(503).json({ error: 'Server is currently OFFLINE (Maintenance Mode)' });
+    }
+
     if (!username) {
         return res.status(400).json({ error: 'Username is required' });
     }
@@ -379,7 +398,7 @@ app.post('/api/v1/admin/generate', async (req, res) => {
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
-        const architect = new ScenarioArchitect(apiKey);
+        const architect = new StoryArchitect(apiKey);
         const storyJson = await architect.generate(prompt, playerCount);
 
         const injestor = new StoryInjestor(dbConfig);
@@ -390,6 +409,76 @@ app.post('/api/v1/admin/generate', async (req, res) => {
         console.error('Generation/Injest failure:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+app.post('/api/v1/admin/password', async (req, res) => {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password too short' });
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('val', sql.NVarChar, newPassword)
+            .query(`
+                IF EXISTS (SELECT 1 FROM SystemConfig WHERE ConfigKey = 'ADMIN_PASSWORD')
+                    UPDATE SystemConfig SET ConfigValue = @val, UpdatedAt = GETDATE() WHERE ConfigKey = 'ADMIN_PASSWORD'
+                ELSE
+                    INSERT INTO SystemConfig (Category, ConfigKey, ConfigValue, IsSecret) VALUES ('AUTH', 'ADMIN_PASSWORD', @val, 1)
+            `);
+
+        global.ADMIN_PASSWORD = newPassword;
+        res.json({ success: true, message: 'Admin password updated. Please re-login.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/v1/admin/server-mode', async (req, res) => {
+    const { mode } = req.body; // ONLINE / OFFLINE
+    if (!['ONLINE', 'OFFLINE'].includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('val', sql.NVarChar, mode)
+            .query(`
+                IF EXISTS (SELECT 1 FROM SystemConfig WHERE ConfigKey = 'SERVER_MODE')
+                    UPDATE SystemConfig SET ConfigValue = @val, UpdatedAt = GETDATE() WHERE ConfigKey = 'SERVER_MODE'
+                ELSE
+                    INSERT INTO SystemConfig (Category, ConfigKey, ConfigValue) VALUES ('SYSTEM', 'SERVER_MODE', @val)
+            `);
+
+        res.json({ success: true, mode });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/v1/admin/status', async (req, res) => {
+    let dbStatus = 'OFFLINE';
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request().query('SELECT 1');
+        dbStatus = 'ONLINE';
+    } catch (e) { /* ignore */ }
+
+    // Get IP
+    const nets = os.networkInterfaces();
+    let serverIp = 'localhost';
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                serverIp = net.address;
+                break;
+            }
+        }
+    }
+
+    res.json({
+        dbStatus,
+        serverMode: global.SERVER_MODE || 'ONLINE',
+        ip: process.env.GAME_URL || `http://${serverIp}:${PORT}`
+    });
 });
 
 app.get('/api/v1/admin/config', async (req, res) => {
@@ -483,17 +572,24 @@ app.listen(PORT, async () => {
             const worlds = await pool.request().query('SELECT COUNT(*) as count FROM Worlds');
 
             if (worlds.recordset[0].count === 0) {
-                logToBuffer('No worlds found. Injesting initial scenario...');
+                logToBuffer('No worlds found. Injesting initial story...');
                 const injestor = new StoryInjestor(dbConfig);
-                const storyPath = path.join(__dirname, '../scenarios/silent_submarine.json');
+                const storyPath = path.join(__dirname, '../stories/silent_submarine.json');
 
                 if (fs.existsSync(storyPath)) {
                     const storyData = JSON.parse(fs.readFileSync(storyPath, 'utf8'));
                     await injestor.injest(storyData);
                 } else {
-                    console.warn('Initial scenario file not found at:', storyPath);
+                    console.warn('Initial story file not found at:', storyPath);
                 }
             }
+
+            // Load System Configs (Passwords, Modes)
+            const sysConfig = await pool.request().query('SELECT ConfigKey, ConfigValue FROM SystemConfig');
+            sysConfig.recordset.forEach(row => {
+                if (row.ConfigKey === 'ADMIN_PASSWORD') global.ADMIN_PASSWORD = row.ConfigValue;
+                if (row.ConfigKey === 'SERVER_MODE') global.SERVER_MODE = row.ConfigValue;
+            });
 
             // Load AI Config from SystemConfig table
             const configResult = await pool.request().query('SELECT ConfigKey, ConfigValue FROM SystemConfig');

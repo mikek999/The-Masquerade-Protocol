@@ -127,7 +127,7 @@
         },
         "plugin_config": {
             "type": "object",
-            "description": "Scenario-specific MCP tool registrations and global variables"
+            "description": "Story-specific MCP tool registrations and global variables"
         }
     },
     "required": [

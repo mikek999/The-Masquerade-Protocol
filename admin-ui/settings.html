@@ -13,14 +13,11 @@
 
 <body class="admin-body">
     <nav class="admin-nav">
-        <div class="nav-brand">
-            <img src="logo.png" alt="Logo" class="logo-img">
-            <div class="logo">PLAYERTXT <span>ENGINE</span> <span class="version-badge">v1.0.0</span></div>
-        </div>
         <ul>
             <li><a href="index.html">DASHBOARD</a></li>
-            <li><a href="generator.html">SCENARIO_GEN</a></li>
+            <li><a href="generator.html">STORY GENERATOR</a></li>
             <li><a href="settings.html" class="active">SETTINGS</a></li>
+            <li><a href="/admin/logout" style="color: var(--danger);">LOGOUT</a></li>
         </ul>
     </nav>
 
@@ -31,9 +28,35 @@
         </header>
 
         <section class="generator-section">
-            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
-                <h2 style="color: var(--text-accent); margin-top: 0;">AI Providers</h2>
+            <h2 style="color: var(--text-primary); margin-top: 0;">Operational Controls</h2>
 
+            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
+                <h3 style="color: var(--text-secondary);">Server Mode</h3>
+                <p style="font-size: 0.9rem; margin-bottom: 1rem; color: #888;">Controls player access to the game
+                    server.</p>
+                <div class="form-group">
+                    <select id="server_mode" class="admin-select">
+                        <option value="ONLINE">ONLINE (Active)</option>
+                        <option value="OFFLINE">OFFLINE (Maintenance)</option>
+                    </select>
+                </div>
+                <button class="btn-primary" id="saveModeBtn"
+                    style="font-size: 0.8rem; padding: 0.8rem;">UPDATE_MODE</button>
+            </div>
+
+            <h2 style="color: var(--text-primary); margin-top: 2rem;">Security</h2>
+            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
+                <div class="form-group">
+                    <label>Change Admin Password</label>
+                    <input type="password" id="new_password" placeholder="New Password (min 8 chars)">
+                </div>
+                <button class="btn-primary" id="changePassBtn"
+                    style="font-size: 0.8rem; padding: 0.8rem; background: var(--danger); color: #fff;">UPDATE_PASSWORD</button>
+            </div>
+
+            <h2 style="color: var(--text-primary); margin-top: 2rem;">AI Providers</h2>
+
+            <div class="stat-card" style="text-align: left; margin-bottom: 2rem;">
                 <div class="form-group">
                     <label>Google Gemini API Key (Director)</label>
                     <input type="password" id="gemini_key" placeholder="AI Studio Key">
@@ -51,7 +74,7 @@
             </div>
 
             <div class="stat-card" style="text-align: left;">
-                <h2 style="color: var(--text-accent); margin-top: 0;">Model Routing</h2>
+                <h3 style="color: var(--text-secondary);">Model Routing</h3>
                 <div class="form-group">
                     <label>Workhorse Preference</label>
                     <select id="workhorse_pref" class="admin-select">
@@ -114,11 +137,50 @@
             }
         };
 
+        // Server Mode Logic
+        const saveModeBtn = document.getElementById('saveModeBtn');
+        const changePassBtn = document.getElementById('changePassBtn');
+
+        async function loadServerMode() {
+            try {
+                const response = await fetch('/api/v1/admin/server-mode');
+                const data = await response.json();
+                document.getElementById('server_mode').value = data.mode;
+            } catch (err) { console.error(err); }
+        }
+
+        saveModeBtn.onclick = async () => {
+            const mode = document.getElementById('server_mode').value;
+            await fetch('/api/v1/admin/server-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            });
+            alert('Server Mode Updated');
+        };
+
+        changePassBtn.onclick = async () => {
+            const newPassword = document.getElementById('new_password').value;
+            if (confirm('Are you sure you want to change the Admin Password? You will be logged out.')) {
+                const res = await fetch('/api/v1/admin/password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newPassword })
+                });
+                if (res.ok) {
+                    window.location.href = '/admin/logout';
+                } else {
+                    alert('Failed to update password');
+                }
+            }
+        };
+
         loadConfig();
+        loadServerMode();
     </script>
     <footer class="admin-footer">
         <div class="footer-content">
-            <div class="footer-logo">PLAYERTXT<span>.ORG</span></div>
+            <div class="footer-logo">Made in The Republic of Texas</div>
             <span class="slogan">Your Imagination, Powered by AI.</span>
 
             <div class="credits">
@@ -127,7 +189,7 @@
                     2025</strong>
             </div>
             <div class="links">
-                <a href="https://playertxt.org" target="_blank">OFFICIAL_COMM_CHANNEL</a>
+                <a href="https://playertxt.org" target="_blank">Official Project Website</a>
             </div>
             <div class="copyright">
                 &copy; 2026 PlayerTXT Protocol. Open Source License. Portions &copy; 1980 Retro-Vibe.

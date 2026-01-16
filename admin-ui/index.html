@@ -13,21 +13,26 @@
 
 <body class="admin-body">
     <nav class="admin-nav">
-        <div class="nav-brand">
-            <img src="logo.png" alt="Logo" class="logo-img">
-            <div class="logo">PLAYERTXT <span>ENGINE</span> <span class="version-badge">v1.0.0</span></div>
-        </div>
         <ul>
             <li><a href="index.html" class="active">DASHBOARD</a></li>
-            <li><a href="generator.html">SCENARIO_GEN</a></li>
+            <li><a href="generator.html">STORY GENERATOR</a></li>
             <li><a href="settings.html">SETTINGS</a></li>
+            <li><a href="/admin/logout" style="color: var(--danger);">LOGOUT</a></li>
         </ul>
     </nav>
 
     <main class="admin-container">
         <header>
-            <h1>Engine Control Unit</h1>
-            <p>PlayerTXT Protocol Status: <span class="status-active">LINKED</span></p>
+            <h1>PlayerTXT Game Engine</h1>
+            <p style="font-size: 0.8rem; margin-bottom: 0.5rem; color: #666;">v1.0.0</p>
+
+            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem;">
+                <p style="margin: 0;">System Status: <span id="sysStatus" class="status-active">CHECKING...</span></p>
+                <button id="toggleServerBtn" class="btn-primary"
+                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem; display: none;">TOGGLE</button>
+            </div>
+            <p id="serverIp"
+                style="font-size: 0.9rem; color: var(--text-accent); margin-top: 0.5rem; font-family: monospace;"></p>
         </header>
 
         <section class="admin-stats">
@@ -40,8 +45,8 @@
                 <div class="value">0</div>
             </div>
             <div class="stat-card">
-                <h3>AI Understudies</h3>
-                <div class="value">0</div>
+                <h3>AI Players</h3>
+                <div class="value" id="aiCount">--</div>
             </div>
         </section>
 
@@ -78,7 +83,7 @@
 
     <footer class="admin-footer">
         <div class="footer-content">
-            <div class="footer-logo">PLAYERTXT<span>.ORG</span></div>
+            <div class="footer-logo">Made in The Republic of Texas</div>
             <span class="slogan">Your Imagination, Powered by AI.</span>
 
             <div class="credits">
@@ -87,7 +92,7 @@
                     2025</strong>
             </div>
             <div class="links">
-                <a href="https://playertxt.org" target="_blank">OFFICIAL_COMM_CHANNEL</a>
+                <a href="https://playertxt.org" target="_blank">Official Project Website</a>
             </div>
             <div class="copyright">
                 &copy; 2026 PlayerTXT Protocol. Open Source License. Portions &copy; 1980 Retro-Vibe.
@@ -96,6 +101,49 @@
     </footer>
 
     <script>
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/v1/admin/status');
+                const data = await res.json();
+
+                const statusSpan = document.getElementById('sysStatus');
+                const toggle = document.getElementById('toggleServerBtn');
+
+                if (data.dbStatus === 'ONLINE') {
+                    statusSpan.innerText = 'ONLINE';
+                    statusSpan.style.color = '#00ff9d';
+                } else {
+                    statusSpan.innerText = 'DB DISCONNECTED';
+                    statusSpan.style.color = '#ff4d4d';
+                }
+
+                document.getElementById('serverIp').innerText = data.ip;
+
+                // Toggle Logic
+                toggle.style.display = 'inline-block';
+                toggle.innerText = data.serverMode === 'ONLINE' ? 'GO OFFLINE' : 'GO ONLINE';
+                toggle.style.background = data.serverMode === 'ONLINE' ? '#ff4d4d' : '#00ff9d';
+
+                toggle.onclick = async () => {
+                    const newMode = data.serverMode === 'ONLINE' ? 'OFFLINE' : 'ONLINE';
+                    await fetch('/api/v1/admin/server-mode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: newMode })
+                    });
+                    updateStatus(); // Refresh
+                };
+
+            } catch (e) {
+                document.getElementById('sysStatus').innerText = 'OFFLINE';
+            }
+        }
+
+        // Initial Load
+        updateStatus();
+        setInterval(updateStatus, 10000);
+
+        // Existing Dashboard Logic
         async function updateStats() {
             try {
                 const response = await fetch('/api/v1/admin/stats');

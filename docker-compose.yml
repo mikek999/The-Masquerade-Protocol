@@ -32,7 +32,8 @@ services:
     volumes:
       - ./admin-ui:/admin-ui
     ports:
-      - "80:80"
+      - "${WEB_PORT:-80}:80"
+      - "${SSL_PORT:-443}:443"
     environment:
       - DB_SERVER=sqlserver
       - DB_USER=sa

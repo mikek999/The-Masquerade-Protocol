@@ -1,7 +1,7 @@
 # PlayerTXT
 
 ## Project Description
-**PlayerTXT** is a hardware-agnostic, AI-driven gaming platform designed to bridge the gap between 1980s retro-computing and modern Generative AI. It functions as a "Universal Thin Client" engine, allowing any device capable of opening a raw TCP socket—from an Atari 800XL to a modern web browser—to connect to a shared, high-fidelity narrative world. The platform features high-stakes, time-limited social deduction simulations and a unique "Understudy System" where AI agents seamlessly impersonate and replace disconnected human players.
+**PlayerTXT** is a hardware-agnostic, AI-driven gaming platform designed to bridge the gap between 1980s retro-computing and modern Generative AI. It functions as a "Universal- **Interactive Story Engine**: Uses Gemini 1.5 Pro to champion stories and manage NPCs.P socket—from an Atari 800XL to a modern web browser—to connect to a shared, high-fidelity narrative world. The platform features high-stakes, time-limited social deduction simulations and a unique "Understudy System" where AI agents seamlessly impersonate and replace disconnected human players.
 
 Official website: [playertxt.org](https://playertxt.org)
 

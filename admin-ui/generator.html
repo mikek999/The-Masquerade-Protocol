@@ -13,36 +13,32 @@
 
 <body class="admin-body">
     <nav class="admin-nav">
-        <div class="nav-brand">
-            <img src="logo.png" alt="Logo" class="logo-img">
-            <div class="logo">PLAYERTXT <span>ENGINE</span> <span class="version-badge">v1.0.0</span></div>
-        </div>
         <ul>
             <li><a href="index.html">DASHBOARD</a></li>
-            <li><a href="generator.html" class="active">SCENARIO_GEN</a></li>
+            <li><a href="generator.html" class="active">STORY GENERATOR</a></li>
             <li><a href="settings.html">SETTINGS</a></li>
+            <li><a href="/admin/logout" style="color: var(--danger);">LOGOUT</a></li>
         </ul>
     </nav>
 
     <main class="admin-container">
         <header>
-            <h1>Scenario Architect</h1>
-            <p>Powered by Google Gemini 1.5 Pro</p>
+            <h1>Story Architect</h1>
+            <p>Generate new immersive stories using the Director (Gemini).</p>
         </header>
 
         <section class="generator-section">
             <div class="form-group">
-                <label for="prompt">Story Concept</label>
-                <textarea id="prompt" rows="5"
-                    placeholder="e.g. A murder mystery in a haunted mansion during a blizzard..."></textarea>
+                <label>Story Prompt</label>
+                <textarea id="prompt" rows="5" placeholder="Describe the world, genre, and initial hook..."></textarea>
             </div>
 
             <div class="form-group">
-                <label for="playerCount">Min Players</label>
-                <input type="number" id="playerCount" value="5">
+                <label>Player Capacity</label>
+                <input type="number" id="playerCount" value="4" min="1" max="10">
             </div>
 
-            <button class="btn-primary" id="generateBtn">GENERATE_STRUCTURE</button>
+            <button class="btn-primary" id="generateBtn">GENERATE_STORY</button>
 
             <div class="generator-log" id="log">
                 > System ready.<br>
@@ -97,7 +93,7 @@
     </script>
     <footer class="admin-footer">
         <div class="footer-content">
-            <div class="footer-logo">PLAYERTXT<span>.ORG</span></div>
+            <div class="footer-logo">Made in The Republic of Texas</div>
             <span class="slogan">Your Imagination, Powered by AI.</span>
 
             <div class="credits">
@@ -106,7 +102,7 @@
                     2025</strong>
             </div>
             <div class="links">
-                <a href="https://playertxt.org" target="_blank">OFFICIAL_COMM_CHANNEL</a>
+                <a href="https://playertxt.org" target="_blank">Official Project Website</a>
             </div>
             <div class="copyright">
                 &copy; 2026 PlayerTXT Protocol. Open Source License. Portions &copy; 1980 Retro-Vibe.
